@@ -1,0 +1,96 @@
+# 方案3：PeerJS P2P点对点联机版本（同热点/同WiFi线下聚会用）
+
+⚠️ 重要前置说明
+
+1. 这个是**点对点直连**，不需要后端服务器，但是硬性条件：**所有人必须连同一个手机热点 / 同一个WiFi**；异地、不同网络连不上。
+2. 依赖 PeerJS 公共中转服务器（只用来交换双方网络地址，卡牌数据是设备之间直接传，不经过中间服务器存房间）。公共中转服务稳定性一般，苹果Safari限制多（会拦截P2P，需要开启允许跨域、不要隐私模式）。
+3. 和我们之前所有功能保持一致：房主权限、两种抽卡模式、记录权限、删除记录、卡库纯图片、记录点击放大。
+4. 使用方式：所有人下载同一个html文件，本地浏览器打开，房主创建房间，其他人输入房间号加入。
+
+> 
+> 对比旧版区别：不再是ws服务器房间模式，是房主作为主机，其他玩家直接连房主手机。房主页面不能锁屏、不能切后台，一旦房主关掉页面，本局直接结束。
+
+下面是完整单文件代码，你全部复制，新建记事本粘贴，另存为 `basket-card-p2p.html`，编码选 UTF-8。
+
+```
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>篮球卡牌联机 P2P版（同热点）</title>
+<script src="[https://unpkg.com/peerjs@1/dist/peerjs.min.js](https://unpkg.com/peerjs@1/dist/peerjs.min.js)"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui}
+body{background:#111;color:#fff;padding:10px;font-size:14px}
+.tab-bar{display:flex;gap:4px;margin-bottom:12px}
+.tab{flex:1;padding:10px;text-align:center;background:#222;border-radius:8px}
+.tab.active{background:#2563eb}
+.panel{display:none}
+.panel.active{display:block}
+input,button{width:100%;padding:12px;margin:6px 0;border-radius:8px;border:none;font-size:16px}
+button.host{background:#22c55e;color:#fff}
+button.danger{background:#ef4444;color:#fff}
+button:disabled{background:#444;color:#888}
+.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.card-item img{width:100%;border-radius:6px}
+.record-item{padding:8px;border:1px solid #333;border-radius:8px;margin:8px 0}
+.big-mask{position:fixed;inset:0;background:rgba(0,0,0,0.9);display:none;align-items:center;justify-content:center;z-index:999}
+.big-mask.show{display:flex}
+.big-mask img{max-width:90%;max-height:90%}
+.tip{padding:10px;margin:8px 0;border-radius:8px;background:#333}
+</style>
+</head>
+<body>
+<div class="tab-bar">
+<div class="tab active" data-tab="game">游戏</div>
+<div class="tab" data-tab="library">卡库</div>
+<div class="tab" data-tab="record">记录</div>
+</div>
+
+<div class="panel active" id="game">
+<div class="tip" id="connTip">等待连接</div>
+<input id="nick" placeholder="输入昵称">
+<input id="roomIdInput" placeholder="房间号">
+<button id="createBtn" class="host">👑 创建房间（房主）</button>
+<button id="joinBtn">加入房间</button>
+
+<div id="hostCtrl" style="display:none">
+<div style="margin:8px 0">
+<label>抽取模式：</label>
+<select id="drawMode">
+<option value="unique">随机抽取（本轮卡牌互不重复）</option>
+<option value="repeat">可重复抽取（允许重复卡牌）</option>
+</select>
+</div>
+<button id="startGameBtn" class="host">🏀 开始游戏</button>
+<button id="endGameBtn" class="danger" style="display:none">结束本局</button>
+<button id="restartBtn" class="host" style="display:none">再来一局</button>
+</div>
+
+<button id="drawBtn" disabled>抽取卡牌（2张）</button>
+<div>我的手牌</div>
+<div class="card-grid" id="handGrid"></div>
+<div>房间玩家列表</div>
+<div id="playerList"></div>
+</div>
+
+<div class="panel" id="library">
+<div>卡库 <span id="libCount"></span></div>
+<div class="card-grid" id="libGrid"></div>
+</div>
+
+<div class="panel" id="record">
+<button id="clearRecBtn" class="danger" style="display:none">清空全部记录（房主）</button>
+<div id="recordBox"></div>
+<div class="tip" id="recTip"></div>
+</div>
+
+<div class="big-mask" id="bigMask">
+<img id="bigImg">
+</div>
+
+<script>
+// ========== 卡牌库（40张，仅图片地址，你替换成你的卡牌图片链接）
+const cardList =
+```
